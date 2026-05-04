@@ -203,7 +203,15 @@ function buildSheetData(hexIdx, itemsRaw, typeFilters) {
   const pings = items.map(i => i.__stats.ping)
   const jits = items.map(i => i.__stats.jitter)
   const losses = items.map(i => i.__stats.loss)
-  const summary = { count: items.length, down: aggNums(downs), up: aggNums(ups), ping: aggNums(pings), jitter: aggNums(jits), loss: aggNums(losses) }
+
+  const usability = items.map(i => i?.stats?.usability_p)
+  const persistence = items.map(i => i?.stats?.persistence_p)
+  const variability = items.map(i => i?.stats?.variability_p)
+  const resilience = items.map(i => i?.stats?.resilience_p)
+//Updated buildSheetData to include new stats
+  const summary = { count: items.length, down: aggNums(downs), up: aggNums(ups), ping: aggNums(pings), jitter: aggNums(jits), loss: aggNums(losses), 
+  usability_p: aggNums(usability), persistence_p: aggNums(persistence), variability_p: aggNums(variability), resilience_p: aggNums(resilience) }
+  
   const domType = dominantTypeOfItems(items, typeFilters)
   return { hexIdx, summary, items, domType }
 }
@@ -516,6 +524,11 @@ function RightPanel({ open, onClose, data, width = 420 }) {
           {statCard('Ping (ms)', summary.ping, ' ms', 0)}
           {statCard('Jitter (ms)', summary.jitter, ' ms', 0)}
           {statCard('Loss (%)', summary.loss, ' %', 1)}
+{/*ADDED UI FOR USABILITY, PERSISTENCE, VARIABILITY, RESILIENCE*/}
+          {statCard('Usability (%)', summary.usability_p, ' %', 1)}
+          {statCard('Persistence (min)', summary.persistence_p, ' min', 1)}
+          {statCard('Variability (s)', summary.variability_p, ' s', 1)}
+          {statCard('Resilience (min)', summary.resilience_p, ' min', 1)}
         </div>
 
         <div style={{ height: 1, background: '#E5E7EB', margin: '12px 0' }} />
@@ -559,7 +572,16 @@ function RightPanel({ open, onClose, data, width = 420 }) {
                     <div><strong>Ping</strong><div>{fmt(s.ping, ' ms', 0)}</div></div>
                     <div><strong>Jitter</strong><div>{fmt(s.jitter, ' ms', 0)}</div></div>
                     <div><strong>Loss</strong><div>{fmt(s.loss, ' %', 1)}</div></div>
+
+                    <div><strong>Usability</strong><div>{fmt(m?.stats?.usability_p, ' %', 1)}</div></div>
+                    <div><strong>Persistence</strong><div>{fmt(m?.stats?.persistence_p, ' min', 1)}</div></div>
+                    <div><strong>Variability</strong><div>{fmt(m?.stats?.variability_p, ' s', 1)}</div></div>
+                    <div><strong>Resilience</strong><div>{fmt(m?.stats?.resilience_p, ' min', 1)}</div></div>  
+
                     <div><strong>Conn</strong><div>{m.__conn || m.conn_tag || '—'}</div></div>
+  
+  {/*ADDED UI FOR NEW PLACEHOLDERS*/}
+                    
                   </div>
 
                   <div style={{ marginTop: 8, fontSize: 12, color: '#6B7280' }}>

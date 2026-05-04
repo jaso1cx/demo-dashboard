@@ -1,8 +1,18 @@
+import json
 import os
 import math
 import requests
+
 import h3
 
+import firebase_admin
+from firebase_admin import credentials, firestore, storage
+
+KEY_PATH = os.environ.get("NETGAUGE_KEY_PATH", "repos/netgauge_service_account_key.json")
+cred = credentials.Certificate(KEY_PATH)
+firebase_admin.initialize_app(cred)
+
+db = firestore.client()
 
 def _median(vals):
     vals = [v for v in (vals or []) if v is not None and not (isinstance(v, float) and math.isnan(v))]
@@ -15,7 +25,6 @@ def _median(vals):
         return float(vals[mid])
     return float((vals[mid - 1] + vals[mid]) / 2.0)
 
-
 def _to_float(v):
     if v is None:
         return None
@@ -23,8 +32,7 @@ def _to_float(v):
         return float(v)
     except Exception:
         return None
-
-
+    
 def _iso(v):
     if v is None:
         return None
@@ -33,34 +41,15 @@ def _iso(v):
     return v
 
 #For calculating usability, persistence, variability, and resilience
+'''
+These QoC calculations are the same as those used in the Supabase repo for consistency,
+but could be adjusted based on the specific requirements or characteristics of the NetGauge data.
+'''
 RTT_Threshold = 100.0 
-'''
-Round trip time (RTT) threshold in milliseconds. This value is used as a benchmark for determining the usability and persistence of a network connection.
-
-'''
 
 TimeWindow = 60.0
-'''
-Time window in seconds used for calculating persistence and variability. 
-This value represents the duration over which the network performance is evaluated to determine how long a connection can maintain acceptable performance levels.
-'''
 
 def calculate_usability(stats: dict) -> float | None:
-    '''
-    Calculates the usability percentage of a network connection based on packet loss and ping time.
-    The function first checks for packet loss percentage; if available, it calculates usability as 100% minus the loss percentage.
-    If packet loss is not available, it checks for ping time and determines usability based on whether the ping time is below or above the defined RTT threshold.
-   
-    Args:        stats (dict): A dictionary containing network performance metrics, including 'loss_pct' for packet loss percentage and 'ping_ms' for ping time in milliseconds.
-
-    Returns:        float | None: The calculated usability percentage, or None if neither metric is available.
-
-
-    Example:    stats = {'loss_pct': 5.0, 'ping_ms': 80.0}
-                usability = calculate_usability(stats) 
-                print(usability)  # Output: 95.0 (since usability is calculated based on packet loss)
-
-    '''
     loss = _to_float(stats.get("loss_pct"))
     ping = _to_float(stats.get("ping_ms"))
 
@@ -76,22 +65,7 @@ def calculate_usability(stats: dict) -> float | None:
     return None
 
 def calculate_persistence(stats: dict) -> float | None:
-    '''
-    Calculates the persistence of a network connection based on ping time.
-    Persistence is measured as the time window during which the connection maintains acceptable performance levels.
 
-    Args:
-        stats (dict): A dictionary containing network performance metrics, including 'ping_ms' for ping time in milliseconds.
-
-    Returns:
-        float | None: The calculated persistence value, or None if ping time is not available.
-
-    
-    Example:   stats = {'ping_ms': 80.0}
-               persistence = calculate_persistence(stats)
-               print(persistence)  # Output: 48.0 (calculated based on the headroom of ping time relative to the RTT threshold and the defined time window)
-
-    '''
     ping = _to_float(stats.get("ping_ms"))
     if ping is None:
         return None
@@ -99,48 +73,21 @@ def calculate_persistence(stats: dict) -> float | None:
     headroom = (RTT_Threshold - ping) / RTT_Threshold * 100.0
     headroom = max(0.0, min(100.0, headroom))
 
-    return round((headroom / 100.0) * TimeWindow, 2)
-
+    return round(headroom / 100.0 * TimeWindow, 2)
 
 def calculate_variability(stats: dict) -> float | None:
-    '''
-    Calculates the variability of a network connection based on ping time and jitter.
-    Variability is expressed as a percentage representing the ratio of jitter to ping time, scaled by the defined time window.
-    
-    Args:        stats (dict): A dictionary containing network performance metrics, including 'ping_ms' for ping time in milliseconds and 'jitter_ms' for jitter in milliseconds.
-
-    Returns:        float | None: The calculated variability percentage, or None if either ping time or jitter is not available.
-
-    Example:    stats = {'ping_ms': 80.0, 'jitter_ms': 10.0}
-                variability = calculate_variability(stats) 
-                print(variability)  # Output: 12.5 (calculated as the ratio of jitter to ping time, scaled by the time window)
-
-    '''
     
     ping = _to_float(stats.get("ping_ms"))
     jitter = _to_float(stats.get("jitter_ms"))
 
     if ping is None or ping == 0 or jitter is None:
         return None 
-    
+
     variability_pct = (jitter/ping) * 100.0
 
     return round((variability_pct/ 100.0) * TimeWindow, 2)
 
 def calculate_resilience(stats: dict) -> float | None:
-    '''
-    Calculates the resilience of a network connection based on packet loss percentage.
-    Resilience is expressed as a value representing the expected recovery time from an outage, calculated based on the packet loss percentage and a defined recovery threshold.
-    
-    Args:        stats (dict): A dictionary containing network performance metrics, including 'loss_pct' for packet loss percentage.
-
-    Returns:        float | None: The calculated resilience value, or None if packet loss percentage is not available.
-
-    Example:    stats = {'loss_pct': 5.0}
-                resilience = calculate_resilience(stats)
-                print(resilience)  # Output: 1.2 (calculated based on the packet loss percentage and the defined recovery threshold)
-
-    '''
     
     recovery_threshold = 24.0
 
@@ -152,36 +99,12 @@ def calculate_resilience(stats: dict) -> float | None:
 
     return round(outage_value * recovery_threshold, 2)
 
-class SupabaseRpcRepo:
-    def __init__(self):
-        url = (os.getenv("SUPABASE_URL") or os.getenv("VITE_SUPABASE_URL") or "").strip()
-        anon = (os.getenv("SUPABASE_ANON_KEY") or os.getenv("VITE_SUPABASE_ANON_KEY") or "").strip()
-        service = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("VITE_SUPABASE_SERVICE_ROLE_KEY") or "").strip()
-        dash = (os.getenv("DASHBOARD_SECRET") or os.getenv("VITE_DASHBOARD_SECRET") or "").strip()
+class NetGaugeRepo:
 
-
-        if not url:
-            raise RuntimeError("SUPABASE_URL (or VITE_SUPABASE_URL) is required")
-
-        key = service or anon
-        if not key:
-            raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY (recommended) or SUPABASE_ANON_KEY is required")
-
-        print("[supabase] url:", url)
-        print("[supabase] anon len:", len(anon) if anon else 0)
-        print("[supabase] service len:", len(service) if service else 0)
-        print("[supabase] using:", "service" if service else "anon")
-        print("[supabase] key len:", len(key) if key else 0)
-        
-        self.base = url.rstrip("/") + "/rest/v1/rpc"
+    def __init__(self, base: str, dash_secret: str | None = None):
+        self.base = base
+        self._dash = dash_secret
         self.http = requests.Session()
-        self.http.headers.update({
-            "apikey": key,
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        })
-
-        self._dash = dash
 
     def _rpc(self, fn: str, payload: dict):
         headers = {}
@@ -194,7 +117,7 @@ class SupabaseRpcRepo:
         if not r.text:
             return None
         return r.json()
-
+    
     def _rpc_map_points(self, bbox, filters: dict, limit: int):
         min_lng, min_lat, max_lng, max_lat = bbox
         payload = {
@@ -215,7 +138,7 @@ class SupabaseRpcRepo:
             "lim": int(limit),
         }
         return self._rpc("rpc_map_points", payload) or []
-
+    
     def get_points(self, bbox, filters: dict, limit: int = 2000):
         rows = self._rpc_map_points(bbox=bbox, filters=filters, limit=limit)
 
@@ -238,7 +161,7 @@ class SupabaseRpcRepo:
                 "stats" : stats,
             })
         return out
-
+    
     def get_hexes(self, res: int, bbox, filters: dict):
         pts = self.get_points(bbox=bbox, filters=filters, limit=20000)
 
@@ -302,7 +225,7 @@ class SupabaseRpcRepo:
             })
 
         return out
-
+    
     def get_groups_in_hex(self, h3_index: str, res: int, bbox, filters: dict, limit: int = 500):
         pts = self.get_points(bbox=bbox, filters=filters, limit=20000)
 
@@ -352,6 +275,8 @@ class SupabaseRpcRepo:
                 },
             })
         return out
-
+    
     def get_group(self, group_id: str):
         return self._rpc("rpc_group_detail", {"group_id": str(group_id)})
+
+

@@ -94,6 +94,23 @@ export default function PointModal({ open, onClose, row }) {
             <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 800 }}>Conn</div>
             <div style={{ fontSize: 18, fontWeight: 950, color: '#111827' }}>{row?.__conn || row?.conn_tag || '—'}</div>
           </div>
+{/*ADDED UI FOR NEW PLACEHOLDERS*/}
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 10 }}>
+            <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 800 }}>Usability</div>
+            <div style={{ fontSize: 18, fontWeight: 950, color: '#111827' }}>{fmt(row?.stats?.usability_p ?? 0, 'min', 1)}</div>
+          </div>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 10 }}>
+            <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 800 }}>Persistence</div>
+            <div style={{ fontSize: 18, fontWeight: 950, color: '#111827' }}>{fmt(row?.stats?.persistence_p ?? 0, 'min', 1)}</div>
+          </div>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 10 }}>
+            <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 800 }}>Variability</div>
+            <div style={{ fontSize: 18, fontWeight: 950, color: '#111827' }}>{fmt(row?.stats?.variability_p ?? 0, 'Mbps', 1)}</div>
+          </div>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 10 }}>
+            <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 800 }}>Resilience</div>
+            <div style={{ fontSize: 18, fontWeight: 950, color: '#111827' }}>{fmt(row?.stats?.resilience_p ?? 0, 'min', 1)}</div>
+          </div>
         </div>
 
         <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 750 }}>

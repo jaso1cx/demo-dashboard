@@ -45,6 +45,9 @@ coverage/
 # Supabase
 /supabase
 
+#Firebase
+backend/repos/netgauge_service_account_key.json
+
 # VSCode
 /.vscode
 
@@ -57,3 +60,4 @@ __pycache__/
 *.pyo
 instance/
 .pytest_cache/
+
